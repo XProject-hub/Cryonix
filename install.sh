@@ -17,25 +17,24 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-cat << "EOF"
-\e[0;36m
-      /$$$$$$  /$$$$$$$  /$$     /$$ /$$$$$$  /$$   /$$ /$$$$$$ /$$   /$$
-     /$$__  $$| $$__  $$|  $$   /$$//$$__  $$| $$$ | $$|_  $$_/| $$  / $$
-    | $$  \__/| $$  \ $$ \  $$ /$$/| $$  \ $$| $$$$| $$  | $$  |  $$/ $$/
-    | $$      | $$$$$$$/  \  $$$$/ | $$  | $$| $$ $$ $$  | $$   \  $$$$/ 
-    | $$      | $$__  $$   \  $$/  | $$  | $$| $$  $$$$  | $$    >$$  $$ 
-    | $$    $$| $$  \ $$    | $$   | $$  | $$| $$\  $$$  | $$   /$$/\  $$
-    |  $$$$$$/| $$  | $$    | $$   |  $$$$$$/| $$ \  $$ /$$$$$$| $$  \ $$
-     \______/ |__/  |__/    |__/    \______/ |__/  \__/|______/|__/  |__/
+echo -e "${CYAN}"
+
+echo '       /$$$$$$  /$$$$$$$  /$$     /$$ /$$$$$$  /$$   /$$ /$$$$$$ /$$   /$$ '
+echo '      /$$__  $$| $$__  $$|  $$   /$$//$$__  $$| $$$ | $$|_  $$_/| $$  / $$ '
+echo '     | $$  \__/| $$  \ $$ \  $$ /$$/| $$  \ $$| $$$$| $$  | $$  |  $$/ $$/ '
+echo '     | $$      | $$$$$$$/  \  $$$$/ | $$  | $$| $$ $$ $$  | $$   \  $$$$/  '
+echo '     | $$      | $$__  $$   \  $$/  | $$  | $$| $$  $$$$  | $$    >$$  $$  '
+echo '     | $$    $$| $$  \ $$    | $$   | $$  | $$| $$\  $$$  | $$   /$$/\  $$ '
+echo '     |  $$$$$$/| $$  | $$    | $$   |  $$$$$$/| $$ \  $$ /$$$$$$| $$  \ $$ '
+echo '      \______/ |__/  |__/    |__/    \______/ |__/  \__/|______/|__/  |__/ '
+echo ' '                                                                     
                                                                      
-\e[0;35m
-                C R Y O N I X   S T R E A M I N G   P A N E L\e[0m
+echo -e "${PURPLE}"                                                                     
 
-        \e[0;34mThank you for installing \e[0;36mCryonix v1.0\e[0m
-        \e[0;32mDeveloped by X Project • 2025 • https://xproject.dev\e[0m
+echo "         C R Y O N I X   S T R E A M I N G   P A N E L${NC}"
 
-EOF
-
+echo -e "${BLUE}            Thank you for installing ${CYAN}Cryonix v1.0${NC}"
+echo -e "${BLUE}          Developed by X Project • 2025 • https://xproject.dev${NC}"
 sleep 1
 
 
@@ -119,7 +118,7 @@ apt-get install -y -qq \
 # Add repositories
 log "Adding required repositories..."
 
-# Add Ondrej PHP repository - improved method for all Ubuntu versions
+# Add Ondrej PHP repository with better error handling
 if [ "$UBUNTU_VERSION" = "20.04" ] || [ "$UBUNTU_VERSION" = "22.04" ] || [ "$UBUNTU_VERSION" = "24.04" ]; then
     # Remove any existing PHP repositories
     rm -f /etc/apt/sources.list.d/ondrej-*
@@ -128,54 +127,79 @@ if [ "$UBUNTU_VERSION" = "20.04" ] || [ "$UBUNTU_VERSION" = "22.04" ] || [ "$UBU
     # Install prerequisites
     apt-get install -y software-properties-common lsb-release ca-certificates apt-transport-https
     
+    # Add GPG key first
+    curl -sSL https://packages.sury.org/php/apt.gpg | apt-key add -
+    
     # Add the PPA repository
     LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php
     
     # Update after adding repository
     apt-get update -qq
     
-    # Wait a moment for repository to be ready
-    sleep 2
+    # Wait for repository to be ready
+    sleep 3
 fi
 
-# Check available PHP versions and install
-log "Checking available PHP versions..."
-apt-cache search php8 | grep -E "^php8\.[0-9]" | head -5
+# Detect available PHP versions dynamically
+log "Detecting available PHP versions..."
+AVAILABLE_PHP_VERSIONS=$(apt-cache search --names-only '^php[0-9]\.[0-9]$' | awk '{print $1}' | sort -V)
+echo "Available PHP versions: $AVAILABLE_PHP_VERSIONS"
 
-# Install PHP and extensions
+# Function to find the best PHP version
+find_best_php_version() {
+    local preferred_versions="php8.3 php8.2 php8.1 php8.0 php7.4"
+    for version in $preferred_versions; do
+        if echo "$AVAILABLE_PHP_VERSIONS" | grep -q "^$version$"; then
+            echo $version
+            return
+        fi
+    done
+    # If no preferred version found, use the latest available
+    echo "$AVAILABLE_PHP_VERSIONS" | tail -1
+}
+
+# Get the best available PHP version
+BEST_PHP=$(find_best_php_version)
+if [ -z "$BEST_PHP" ]; then
+    error "No PHP version found in repositories"
+fi
+
+# Extract version number (e.g., php8.1 -> 8.1)
+PHP_VERSION=$(echo $BEST_PHP | sed 's/php//')
+log "Selected PHP version: $PHP_VERSION"
+
+# Install PHP and extensions with better error handling
 log "Installing PHP $PHP_VERSION and extensions..."
-apt-get install -y \
-    php${PHP_VERSION} \
-    php${PHP_VERSION}-fpm \
-    php${PHP_VERSION}-mysql \
-    php${PHP_VERSION}-curl \
-    php${PHP_VERSION}-gd \
-    php${PHP_VERSION}-mbstring \
-    php${PHP_VERSION}-xml \
-    php${PHP_VERSION}-zip \
-    php${PHP_VERSION}-bcmath \
-    php${PHP_VERSION}-intl \
-    php${PHP_VERSION}-readline \
-    php${PHP_VERSION}-common \
-    php${PHP_VERSION}-cli \
-    php${PHP_VERSION}-redis || {
-        warning "Some PHP extensions failed to install, trying without redis extension..."
-        apt-get install -y \
-            php${PHP_VERSION} \
-            php${PHP_VERSION}-fpm \
-            php${PHP_VERSION}-mysql \
-            php${PHP_VERSION}-curl \
-            php${PHP_VERSION}-gd \
-            php${PHP_VERSION}-mbstring \
-            php${PHP_VERSION}-xml \
-            php${PHP_VERSION}-zip \
-            php${PHP_VERSION}-bcmath \
-            php${PHP_VERSION}-intl \
-            php${PHP_VERSION}-readline \
-            php${PHP_VERSION}-common \
-            php${PHP_VERSION}-cli
-    }
 
+# First, try to install core PHP
+if ! apt-get install -y php${PHP_VERSION}; then
+    error "Failed to install PHP ${PHP_VERSION}"
+fi
+
+# Install extensions one by one with error handling
+PHP_EXTENSIONS="fpm mysql curl gd mbstring xml zip bcmath intl readline common cli"
+FAILED_EXTENSIONS=""
+
+for ext in $PHP_EXTENSIONS; do
+    log "Installing php${PHP_VERSION}-${ext}..."
+    if ! apt-get install -y php${PHP_VERSION}-${ext}; then
+        warning "Failed to install php${PHP_VERSION}-${ext}"
+        FAILED_EXTENSIONS="$FAILED_EXTENSIONS php${PHP_VERSION}-${ext}"
+    fi
+done
+
+# Try to install Redis extension separately
+log "Installing Redis extension..."
+if ! apt-get install -y php${PHP_VERSION}-redis; then
+    warning "Redis extension not available for PHP ${PHP_VERSION}"
+fi
+
+if [ -n "$FAILED_EXTENSIONS" ]; then
+    warning "Some PHP extensions failed to install: $FAILED_EXTENSIONS"
+    warning "Continuing with available extensions..."
+fi
+
+success "PHP $PHP_VERSION installation completed"
 
 # Install Nginx
 log "Installing Nginx..."
@@ -210,33 +234,19 @@ apt-get install -y nodejs
 
 success "All dependencies installed successfully"
 
-# Configure MariaDB
-log "Configuring MariaDB..."
-systemctl start mariadb
-systemctl enable mariadb
+# Fix MariaDB installation issues
+log "Preparing MariaDB installation..."
 
-# Generate secure passwords
-DB_ROOT_PASSWORD=$(openssl rand -base64 32)
-DB_USER_PASSWORD=$(openssl rand -base64 32)
-ADMIN_PATH=$(openssl rand -hex 8)
-JWT_SECRET=$(openssl rand -base64 64)
+# Remove any conflicting MySQL installations
+apt-get remove --purge mysql-server mysql-client mysql-common -y 2>/dev/null || true
+apt-get autoremove -y 2>/dev/null || true
 
-# Secure MariaDB installation
-mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$DB_ROOT_PASSWORD';" 2>/dev/null || \
-mysql -e "UPDATE mysql.user SET Password = PASSWORD('$DB_ROOT_PASSWORD') WHERE User = 'root';"
-mysql -e "DELETE FROM mysql.user WHERE User='';"
-mysql -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
-mysql -e "DROP DATABASE IF EXISTS test;"
-mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
-mysql -e "FLUSH PRIVILEGES;"
+# Clean up any leftover files
+rm -rf /var/lib/mysql-files 2>/dev/null || true
 
-# Create Cryonix database and user
-mysql -u root -p$DB_ROOT_PASSWORD -e "CREATE DATABASE IF NOT EXISTS cryonix_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mysql -u root -p$DB_ROOT_PASSWORD -e "CREATE USER IF NOT EXISTS 'cryonix_admin'@'localhost' IDENTIFIED BY '$DB_USER_PASSWORD';"
-mysql -u root -p$DB_ROOT_PASSWORD -e "GRANT ALL PRIVILEGES ON cryonix_db.* TO 'cryonix_admin'@'localhost';"
-mysql -u root -p$DB_ROOT_PASSWORD -e "FLUSH PRIVILEGES;"
-
-success "MariaDB configured successfully"
+# Ensure proper ownership of MariaDB directories
+chown -R mysql:mysql /var/lib/mysql 2>/dev/null || true
+chown -R mysql:mysql /var/log/mysql 2>/dev/null || true
 
 # Install Python dependencies
 log "Installing Python packages..."
@@ -274,6 +284,27 @@ chmod -R 755 $INSTALL_DIR
 chmod -R 777 $INSTALL_DIR/streams
 chmod -R 777 $INSTALL_DIR/logs
 chmod -R 755 $INSTALL_DIR/backups
+
+# Prepare Nginx installation
+log "Preparing Nginx installation..."
+
+# Remove any conflicting web servers
+systemctl stop apache2 2>/dev/null || true
+systemctl disable apache2 2>/dev/null || true
+apt-get remove --purge apache2 apache2-utils -y 2>/dev/null || true
+
+# Check for port conflicts
+if netstat -tulpn | grep -q ":80 "; then
+    log "Port 80 is in use, attempting to free it..."
+    fuser -k 80/tcp 2>/dev/null || true
+    sleep 3
+fi
+
+# Ensure Nginx directories exist
+mkdir -p /var/log/nginx
+mkdir -p /var/lib/nginx
+chown -R www-data:www-data /var/log/nginx
+chown -R www-data:www-data /var/lib/nginx
 
 # Configure Nginx
 log "Configuring Nginx..."
@@ -347,6 +378,32 @@ nginx -t && systemctl restart nginx
 systemctl enable nginx
 
 success "Nginx configured successfully"
+
+# Ensure PHP-FPM is properly configured and running
+log "Verifying PHP-FPM configuration..."
+
+# Check if PHP-FPM service exists
+if ! systemctl list-unit-files | grep -q "php${PHP_VERSION}-fpm"; then
+    error "PHP-FPM service not found for PHP ${PHP_VERSION}"
+    exit 1
+fi
+
+# Start PHP-FPM if not running
+if ! systemctl is-active --quiet php${PHP_VERSION}-fpm; then
+    systemctl start php${PHP_VERSION}-fpm
+    sleep 3
+fi
+
+# Verify socket exists
+if [ ! -S "/var/run/php/php${PHP_VERSION}-fpm.sock" ]; then
+    error "PHP-FPM socket not found at /var/run/php/php${PHP_VERSION}-fpm.sock"
+    ls -la /var/run/php/ || true
+    exit 1
+fi
+
+systemctl enable php${PHP_VERSION}-fpm
+success "PHP-FPM verified and running"
+
 
 # Configure PHP
 log "Configuring PHP..."
