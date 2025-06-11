@@ -2,46 +2,71 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-require_once 'config.php';
+// Include config without causing constant conflicts
+$config_file = __DIR__ . '/config.php';
+if (file_exists($config_file)) {
+    require_once $config_file;
+} else {
+    die("Config file not found at: $config_file\n");
+}
 
-class Database {
-    private $host = DB_HOST;
-    private $db_name = DB_NAME;
-    private $username = DB_USER;
-    private $password = DB_PASS;
+class Database
+{
+    private $host;
+    private $db_name;
+    private $username;
+    private $password;
     private $conn;
 
-    public function getConnection() {
-        $this->conn = null;
-        try {
-            $this->conn = new PDO(
-                "mysql:host=" . $this->host . ";dbname=" . $this->db_name,
-                $this->username,
-                $this->password,
-                [
+    public function __construct()
+    {
+        $this->host = DB_HOST;
+        $this->db_name = DB_NAME;
+        $this->username = DB_USER;
+        $this->password = DB_PASS;
+    }
+
+    public function getConnection()
+    {
+        if ($this->conn === null) {
+            try {
+                // First connect without database to create it if needed
+                $dsn = "mysql:host=" . $this->host . ";charset=utf8mb4";
+                $this->conn = new PDO($dsn, $this->username, $this->password, [
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                     PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
-                ]
-            );
-        } catch(PDOException $exception) {
-            error_log("Database connection error: " . $exception->getMessage());
-            throw new Exception("Database connection failed: " . $exception->getMessage());
+                ]);
+
+                // Create database if it doesn't exist
+                $this->conn->exec("CREATE DATABASE IF NOT EXISTS `{$this->db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                $this->conn->exec("USE `{$this->db_name}`");
+
+            } catch (PDOException $exception) {
+                error_log("Database connection error: " . $exception->getMessage());
+                throw new Exception("Database connection failed: " . $exception->getMessage());
+            }
         }
         return $this->conn;
     }
 }
 
 // Database Schema Creation
-function createTables() {
+function createTables()
+{
     try {
         $database = new Database();
         $db = $database->getConnection();
-        
+
         if (!$db) {
             throw new Exception("Failed to get database connection");
         }
-        
+
+        echo "Creating database tables...\n";
+
+        // Disable foreign key checks temporarily
+        $db->exec("SET FOREIGN_KEY_CHECKS = 0");
+
         // Users table
         $db->exec("CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -57,7 +82,21 @@ function createTables() {
             INDEX idx_email (email),
             INDEX idx_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
+
+        echo "Users table created successfully\n";
+
+        // Settings table (no foreign keys)
+        $db->exec("CREATE TABLE IF NOT EXISTS settings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            setting_key VARCHAR(100) UNIQUE NOT NULL,
+            setting_value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_key (setting_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+        echo "Settings table created successfully\n";
+
         // Channels table
         $db->exec("CREATE TABLE IF NOT EXISTS channels (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -72,10 +111,11 @@ function createTables() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_name (name),
             INDEX idx_category (category),
-            INDEX idx_status (status),
-            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+            INDEX idx_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
+
+        echo "Channels table created successfully\n";
+
         // Streams table
         $db->exec("CREATE TABLE IF NOT EXISTS streams (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -89,21 +129,11 @@ function createTables() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_status (status),
-            INDEX idx_started (started_at),
-            FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            INDEX idx_started (started_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
-        // Settings table
-        $db->exec("CREATE TABLE IF NOT EXISTS settings (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            setting_key VARCHAR(100) UNIQUE NOT NULL,
-            setting_value TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_key (setting_key)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
+
+        echo "Streams table created successfully\n";
+
         // Resellers table
         $db->exec("CREATE TABLE IF NOT EXISTS resellers (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -113,10 +143,11 @@ function createTables() {
             commission_rate DECIMAL(5,2) DEFAULT 0.00,
             status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
+
+        echo "Resellers table created successfully\n";
+
         // User subscriptions table
         $db->exec("CREATE TABLE IF NOT EXISTS user_subscriptions (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -125,11 +156,11 @@ function createTables() {
             expires_at TIMESTAMP NULL,
             status ENUM('active', 'expired', 'suspended') DEFAULT 'active',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
+
+        echo "User subscriptions table created successfully\n";
+
         // Logs table
         $db->exec("CREATE TABLE IF NOT EXISTS logs (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -141,14 +172,22 @@ function createTables() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_user_id (user_id),
             INDEX idx_action (action),
-            INDEX idx_created_at (created_at),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+            INDEX idx_created_at (created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        
+
+        echo "Logs table created successfully\n";
+
+        // Re-enable foreign key checks
+        $db->exec("SET FOREIGN_KEY_CHECKS = 1");
+
         // Insert default admin user
         $stmt = $db->prepare("INSERT IGNORE INTO users (username, password, email, role) VALUES (?, ?, ?, ?)");
-        $stmt->execute(['cryonix', password_hash('cryonix123', PASSWORD_DEFAULT), 'admin@cryonix.local', 'admin']);
-        
+        $result = $stmt->execute(['cryonix', password_hash('cryonix123', PASSWORD_DEFAULT), 'admin@cryonix.local', 'admin']);
+
+        if ($result) {
+            echo "Default admin user created successfully\n";
+        }
+
         // Insert default settings
         $defaultSettings = [
             ['site_name', 'Cryonix Panel'],
@@ -164,19 +203,22 @@ function createTables() {
             ['stream_timeout', '300'],
             ['enable_logs', '1']
         ];
-        
+
         $stmt = $db->prepare("INSERT IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)");
         foreach ($defaultSettings as $setting) {
             $stmt->execute($setting);
         }
-        
+
+        echo "Default settings inserted successfully\n";
+
         // Create sample channel for testing
         $stmt = $db->prepare("INSERT IGNORE INTO channels (name, stream_url, category, status, created_by) VALUES (?, ?, ?, ?, ?)");
         $stmt->execute(['Test Channel', 'http://example.com/stream.m3u8', 'Entertainment', 'active', 1]);
-        
+
+        echo "Sample channel created successfully\n";
         echo "Database tables created successfully\n";
         return true;
-        
+
     } catch (Exception $e) {
         error_log("Database setup error: " . $e->getMessage());
         echo "Error creating database tables: " . $e->getMessage() . "\n";
@@ -186,12 +228,13 @@ function createTables() {
 
 // Test database connection first
 try {
+    echo "Testing database connection...\n";
     $database = new Database();
     $db = $database->getConnection();
-    
+
     if ($db) {
         echo "Database connection successful\n";
-        
+
         // Run table creation
         if (createTables()) {
             echo "Database setup completed successfully\n";
@@ -204,7 +247,7 @@ try {
         echo "Failed to connect to database\n";
         exit(1);
     }
-    
+
 } catch (Exception $e) {
     echo "Database error: " . $e->getMessage() . "\n";
     exit(1);

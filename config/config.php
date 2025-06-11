@@ -8,7 +8,7 @@ define('DB_PASS', 'your_secure_password');
 define('SITE_NAME', 'Cryonix Panel');
 define('SITE_URL', 'http://localhost');
 define('ADMIN_EMAIL', 'admin@cryonix.local');
-define('ADMIN_PATH', 'admin'); // Add this line for admin panel path
+define('ADMIN_PATH', 'admin');
 
 // Security
 define('JWT_SECRET', 'your_jwt_secret_key_here');
@@ -23,7 +23,7 @@ define('HLS_OUTPUT_DIR', '/opt/cryonix/streams/');
 define('TRANSCODER_API', 'http://localhost:8000');
 
 // System Info (renamed to avoid conflicts)
-define('CRYONIX_PHP_VERSION', '8.1');
+define('CRYONIX_PHP_VERSION', '7.4');
 define('CRYONIX_PYTHON_VERSION', '3.10');
 define('CRYONIX_UBUNTU_VERSION', '20.04');
 
@@ -83,6 +83,10 @@ define('LOG_LEVEL', 'INFO'); // DEBUG, INFO, WARNING, ERROR
 define('LOG_MAX_SIZE', '10M');
 define('LOG_ROTATION', true);
 
+// Version Information
+define('CRYONIX_VERSION', '1.0.0');
+define('CRYONIX_BUILD', date('Y-m-d H:i:s'));
+
 // Error Reporting
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -92,31 +96,32 @@ ini_set('error_log', '/opt/cryonix/logs/php_errors.log');
 // Timezone
 date_default_timezone_set('UTC');
 
-// Version Information
-define('CRYONIX_VERSION', '1.0.0');
-define('CRYONIX_BUILD', date('Y-m-d H:i:s'));
-
 // Helper Functions
-function getConfigValue($key, $default = null) {
+function getConfigValue($key, $default = null)
+{
     return defined($key) ? constant($key) : $default;
 }
 
-function isDebugMode() {
+function isDebugMode()
+{
     return defined('ENABLE_DEBUG') && ENABLE_DEBUG === true;
 }
 
-function getLogPath($filename = 'app.log') {
+function getLogPath($filename = 'app.log')
+{
     return LOGS_DIR . '/' . $filename;
 }
 
-function getStreamPath($filename = '') {
+function getStreamPath($filename = '')
+{
     return STREAMS_DIR . '/' . $filename;
 }
 
 // Database Connection Helper
-function getDatabaseConnection() {
+function getDatabaseConnection()
+{
     static $pdo = null;
-    
+
     if ($pdo === null) {
         try {
             $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4";
@@ -126,37 +131,38 @@ function getDatabaseConnection() {
                 PDO::ATTR_EMULATE_PREPARES => false,
                 PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
             ];
-            
+
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
             error_log("Database connection failed: " . $e->getMessage());
             throw new Exception("Database connection failed");
         }
     }
-    
+
     return $pdo;
 }
 
 // Redis Connection Helper
-function getRedisConnection() {
+function getRedisConnection()
+{
     static $redis = null;
-    
+
     if ($redis === null && class_exists('Redis')) {
         try {
             $redis = new Redis();
             $redis->connect(REDIS_HOST, REDIS_PORT);
-            
+
             if (REDIS_PASSWORD) {
                 $redis->auth(REDIS_PASSWORD);
             }
-            
+
             $redis->select(REDIS_DATABASE);
         } catch (Exception $e) {
             error_log("Redis connection failed: " . $e->getMessage());
             $redis = null;
         }
     }
-    
+
     return $redis;
 }
 
@@ -173,5 +179,4 @@ if (!file_exists(getLogPath('php_errors.log'))) {
     touch(getLogPath('php_errors.log'));
     chmod(getLogPath('php_errors.log'), 0644);
 }
-
 ?>
