@@ -1,0 +1,191 @@
+## Cryonix: Lightweight Next-Gen Streaming Management Panel Use Case Document
+
+### 1. Introduction
+
+**Cryonix** is the most advanced, ultra-lightweight, and efficient streaming management panel ever created. Designed to surpass Xtream-UI and XUI.one in every category—performance, usability, features, and simplicity—it is built with **PHP 8.x**, **Python 3.11+**, and **Bootstrap 5.x CSS only**. There is **no Docker**, **no NPM**, **no React**, and absolutely **no unnecessary services** to ensure Cryonix consumes the **lowest resources** while delivering **maximum power**.
+
+Cryonix is deployable on **Ubuntu 20.04, 22.04, and 24.04 LTS**, with an automated installer, randomized admin login URLs, and dynamic stream control. The admin panel is designed for simplicity and power—admins never need to touch code.
+
+### 2. Stakeholders & Actors
+
+| Actor              | Description & Goals                                  | Permissions                                            |
+| ------------------ | ---------------------------------------------------- | ------------------------------------------------------ |
+| **Admin**          | Has full power to manage everything via intuitive UI | CRUD on everything, system updates, streaming settings |
+| **Reseller**       | Manages users within assigned limits                 | Add/edit users, assign channels, monitor usage         |
+| **End-User**       | Consumes content and manages their profile           | Watch streams, change password, 2FA, select theme      |
+| **Billing System** | Handles transactions from Stripe, PayPal, and crypto | Receive payment callbacks, show invoices               |
+| **CDN/Edge Node**  | Distributes live and VOD content globally            | Pull content from origin                               |
+
+### 3. Functional Requirements
+
+#### 3.0 Performance Goals
+
+Cryonix is optimized to:
+
+* Handle **thousands of simultaneous live streams** and users without buffering
+* Support **massive VOD libraries**, high bitrate channels, and **restreaming at scale**
+* Integrate **real-time monitoring** and auto-recovery on stream failure
+* Deliver superior performance to Xtream-UI/XUI.one under high load using minimal resources
+
+#### 3.1 Streaming Format Support
+
+Cryonix supports **ALL known modern streaming formats** for input/output:
+
+* **Ingest**: RTMP, RTSP, SRT, WebRTC, HLS, MPEG-TS
+* **Delivery**: HLS, MPEG-DASH, CMAF, RTMP, SRT, HDS, WebRTC, progressive MP4
+
+#### 3.2 Channel/VOD Control
+
+* Add stream provider via:
+
+  * M3U URL (auto parse + EPG mapping)
+  * Xtream-compatible API (DNS\:Port + user/pass)
+
+* View all provider channels in panel
+
+* Auto sync and remap provider names to local names
+
+* Fetch EPG data automatically and intelligently match to stream names
+
+* Create/Edit/Delete channels or VOD entries
+
+* FFmpeg pipeline control from browser
+
+* Category grouping
+
+* Bulk import (M3U/M3U8) with auto fuzzy EPG match
+
+* Instant preview & health check
+
+* DRM token generation
+
+#### 3.3 User Management
+
+* Reseller > User > Viewer model
+* Admin controls all roles through GUI
+* Optional 2FA (email/SMS)
+* Custom quotas, time limits, channel packages
+
+#### 3.4 Billing System
+
+* Stripe, PayPal integration (PCI-compliant)
+* Cryptocurrency wallet support: BTC, LTC, USDT (TRC20/ERC20)
+* Webhook/payment verification
+* PDF invoice generation, refund control
+
+#### 3.5 Transcoding & Health Engine
+
+* Python microservices to launch FFmpeg
+* Admin panel control for resolutions (240p–4K)
+* Auto-restart if stream dies
+* Visual stream status dashboard
+
+#### 3.6 Admin Update Button
+
+* "Update Cryonix" button in Settings
+* Pulls new code and patches from GitHub (later via licensed server)
+* Applies DB updates and restarts required services automatically
+* Admin never needs SSH or terminal
+
+### 4. API Layer
+
+#### 4.1 Laravel API Endpoints
+
+| Method | Endpoint               | Description       |
+| ------ | ---------------------- | ----------------- |
+| GET    | `/api/v1/channels`     | List all channels |
+| POST   | `/api/v1/channel`      | Create channel    |
+| PUT    | `/api/v1/channel/{id}` | Update channel    |
+| DELETE | `/api/v1/channel/{id}` | Delete channel    |
+
+#### 4.2 FastAPI (Python) Microservices
+
+\| POST   | `/stream/start`              | Launch FFmpeg job              |
+\| POST   | `/stream/stop`               | Stop transcoding               |
+
+### 5. UI/UX Design
+
+* Built using Bootstrap 5.3 only (no React/NPM)
+* Dark/Light toggle
+* Neon accents and animated transitions
+* Admin dashboard: drag-and-drop cards
+* Instant search bar, voice-enabled
+* Fully responsive (mobile/tablet/desktop)
+* PWA support with push notifications
+
+### 6. File Structure
+
+```bash
+/var/www/cryonix
+├── /public             # Entry point
+├── /assets             # Static assets (CSS/JS)
+├── /views              # Admin/User/Reseller panels
+├── /api                # PHP Laravel APIs
+├── /scripts            # Maintenance scripts
+/opt/cryonix/services
+├── /transcoder         # Python FFmpeg handlers
+├── /utils              # Helpers and validators
+```
+
+### 7. Architecture
+
+```
+Client → NGINX → Laravel (PHP) ↔ FastAPI (Python) → Redis/MySQL ↔ CDN
+```
+
+### 8. Security
+
+* Role-based access for Admin/Reseller/User
+* JWT tokens for APIs
+* Hidden login URLs with randomized paths
+* SSL enforced
+* WAF support
+* IP blacklisting & brute-force protection
+
+### 9. Maintenance & Scale
+
+* Add more PHP/Python servers horizontally
+* Centralized Redis state
+* Daily MySQL dumps to S3-compatible storage
+* Built-in update system with rollback
+* NGINX load balancing
+
+### 10. Installation
+
+> 📍 **Installation Path:** Cryonix installs in `/opt/cryonix` to ensure clean, secure, and professional deployment of all components.
+> This directory structure supports separation of web files, services, configurations, and update logic, optimized for production environments.
+
+```bash
+# One-command installer for Cryonix (installs to /opt/cryonix)
+curl -sSL https://github.com/xproject-hub/Cryonix/install.sh | bash
+```
+
+* Installs all required services into `/opt/cryonix`: NGINX, PHP-FPM, MySQL, Redis, Python 3.11, Laravel, FastAPI
+* Fully automated, only asks for license key
+* After installation, Cryonix displays:
+
+```
+✅ Cryonix successfully installed!
+
+🔗 Admin Login:     http://<SERVER_IP>:<PORT>/<RANDOM>/login
+📺 Admin Dashboard: http://<SERVER_IP>:<PORT>/<RANDOM>/dashboard
+👤 Default Username: cryonix
+🔐 Default Password: cryonix123 (change on first login)
+🗄️  MySQL User:     cryonix_admin
+🔑 MySQL Password:  <AUTO_GENERATED_PASSWORD>
+```
+
+* Admin can immediately log in using above info and start managing the system
+* Password change prompt appears on first login
+
+### 11. Why Cryonix > Xtream-UI/XUI.one
+
+* ✅ Cleaner, faster, and 100% control from GUI
+* ✅ Better performance: no Node.js, no Docker
+* ✅ Modern design, mobile-friendly, voice-enabled
+* ✅ More streaming formats supported
+* ✅ Admin never touches code to operate anything
+
+---
+
+*Prepared by: X Project | Senior Fullstack Developer | Cryonix Blueprint v1.0 – Built to Outperform Everything*
